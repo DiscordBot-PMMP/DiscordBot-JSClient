@@ -8,8 +8,5 @@
   },
   "keywords": [],
   "author": "",
-  "license": "OSL-3.0",
-  "dependencies": {
-    "ws": "^8.13.0"
-  }
+  "license": "OSL-3.0"
 }
