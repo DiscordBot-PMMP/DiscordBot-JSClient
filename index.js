@@ -3,18 +3,24 @@ const net = require("net");
 const host = "127.0.0.1";
 const port = 22222;
 
-function getBuffer(data) {
-    data = JSON.stringify(data);
-    let buf = Buffer.alloc(4 + Buffer.byteLength(data, "utf8"));
-    buf.writeUInt32BE(Buffer.byteLength(data, "utf8"));
-    buf.write(data, 4)
-    return buf;
-}
+let heartbeatInterval;
 
 const client = net.createConnection(port, host, () => {
-    console.log("Connected, sending verify packet.");
-    client.write(getBuffer([0, {"version": 1, "magic": 0x4a61786b446576}]))
+    console.log("Connected to " + host + ":" + port + ", sending verify packet.");
+    writePacket([0, {"version": 1, "magic": 0x4a61786b446576}]);
+    heartbeatInterval = setInterval(() => {
+        writePacket([1, {"uid": 0, "heartbeat": Date.now()/1000}]);
+    }, 1000);
 });
+
+function writePacket(rawdata) {
+    data = JSON.stringify(rawdata[1]);
+    let buf = Buffer.alloc(4 + 2 + Buffer.byteLength(data, "utf8"));
+    buf.writeUInt32BE(Buffer.byteLength(data, "utf8") + 2);
+    buf.writeUInt16BE(rawdata[0], 4);
+    buf.write(data, 4 + 2)
+    client.write(buf);
+}
 
 client.on("data", (data) => {
     const length = data.readUInt32BE(0);
@@ -31,11 +37,14 @@ client.on("error", (error) => {
 });
 
 client.on("close", () => {
+    if(heartbeatInterval){
+        clearInterval(heartbeatInterval);
+    }
     console.log("Connection closed");
 });
 
-process.on("exit", async() => {
-    client.end(async() => {
+process.on("exit", () => {
+    client.end(() => {
         console.log("Connection ended");
         process.exit()
     });
@@ -43,7 +52,7 @@ process.on("exit", async() => {
 
 process.on('SIGINT', function() {
     console.error('Emergency exit.');
-    client.write(getBuffer([63, {"message": "Critical error."}]));
+    writePacket([63, {"message": "Critical error."}]);
     client.end(async() => {
         console.info("Connection closed.");
         process.kill(process.pid);
