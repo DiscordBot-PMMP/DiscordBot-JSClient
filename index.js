@@ -1,17 +1,31 @@
-const net = require("net");
+import { createConnection } from "net";
 
 const host = "127.0.0.1";
 const port = 22222;
 
 let heartbeatInterval;
 
-const client = net.createConnection(port, host, () => {
+const client = createConnection(port, host, () => {
     console.log("Connected to " + host + ":" + port + ", sending verify packet.");
     writePacket([0, {"version": 1, "magic": 0x4a61786b446576}]);
     heartbeatInterval = setInterval(() => {
         writePacket([1, {"uid": 0, "heartbeat": Date.now()/1000}]);
     }, 1000);
 });
+
+function readPackets(data){
+    let packets = [];
+    const packetLength = data.readUInt32BE(0);
+    let packetData = data.subarray(4, packetLength + 4);
+    data = data.subarray(packetLength + 4);
+    if(data.length > 0){
+        readPackets(data).forEach((packet) => {
+            packets.push(packet);
+        });
+    }
+    packets.push(packetData);
+    console.log(`Received ${packets.length} packets, ${packets.toString()}`);
+}
 
 function writePacket(rawdata) {
     data = JSON.stringify(rawdata[1]);
@@ -23,13 +37,10 @@ function writePacket(rawdata) {
 }
 
 client.on("data", (data) => {
-    const length = data.readUInt32BE(0);
-    let cdata = data.subarray(4, length + 4);
-    data = data.subarray(length + 4);
-    if(data.length > 0){
-        console.log("leftover data: " + data);
-    }
-    console.log(`Received: Len=${length} Data=${cdata.toString()}`);
+    const packets = readPackets(data);
+    packets.forEach((packet) => {
+        console.log(`Received packet: ${packet.toString()}`);
+    });
 });
 
 client.on("error", (error) => {
