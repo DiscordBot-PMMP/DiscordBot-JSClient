@@ -1,11 +1,11 @@
-import { createConnection } from "net";
+const net = require("net");
 
 const host = "127.0.0.1";
 const port = 22222;
 
 let heartbeatInterval;
 
-const client = createConnection(port, host, () => {
+const client = net.createConnection(port, host, () => {
     console.log("Connected to " + host + ":" + port + ", sending verify packet.");
     writePacket([0, {"version": 1, "magic": 0x4a61786b446576}]);
     heartbeatInterval = setInterval(() => {
